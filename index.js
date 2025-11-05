@@ -13,7 +13,7 @@ app.use(express.json());
 app.use(cors());
 
 // MongoDB connection
-mongoose.connect(process.env.MONGO_URI)
+mongoose.connect(process.env.mongodb://atlas-sql-690b384c642f83707e3b32f6-zrhyke.a.query.mongodb.net/Vansh?ssl=true&authSource=admin)
   .then(() => console.log("✅ MongoDB Connected"))
   .catch(err => console.log("❌ MongoDB Error:", err));
 
