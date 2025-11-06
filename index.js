@@ -1,4 +1,3 @@
-// ✅ Vansh Backend Auth System
 import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
@@ -6,96 +5,68 @@ import cors from "cors";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
-// 🌍 Load environment variables
 dotenv.config();
 
-// 🔧 Initialize Express app
 const app = express();
 app.use(express.json());
 app.use(cors());
 
-// ✅ MongoDB Connection
-mongoose
-  .connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
-  .then(() => console.log("✅ MongoDB Connected Successfully"))
-  .catch((err) => console.error("❌ MongoDB Connection Error:", err));
+// 🧩 Debug log to confirm env is loaded
+console.log("🔍 Checking MONGODB_URI:", process.env.MONGODB_URI ? "✅ Found" : "❌ Missing");
 
-// 🧩 User Schema & Model
+// ✅ MongoDB connection (safe fallback)
+const mongoURI = process.env.MONGODB_URI || "mongodb+srv://Vansh:Vansh000@atlas-sql-690b384c642f83707e3b32f6-zrhyke.a.query.mongodb.net/Vansh?retryWrites=true&w=majority&appName=Cluster0";
+
+mongoose.connect(mongoURI)
+  .then(() => console.log("✅ MongoDB Connected"))
+  .catch(err => console.log("❌ MongoDB Connection Error:", err));
+
 const userSchema = new mongoose.Schema({
-  email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-  gameId: { type: String, required: true },
+  email: { type: String, unique: true },
+  password: String,
+  gameId: String
 });
 
 const User = mongoose.model("User", userSchema);
 
-// 📝 Signup Route
+// Signup route
 app.post("/signup", async (req, res) => {
   try {
     const { email, password, gameId } = req.body;
+    const existing = await User.findOne({ email });
+    if (existing) return res.status(400).json({ message: "Email already registered" });
 
-    if (!email || !password || !gameId)
-      return res.status(400).json({ message: "All fields required" });
+    const hash = await bcrypt.hash(password, 10);
+    const user = new User({ email, password: hash, gameId });
+    await user.save();
 
-    const existingUser = await User.findOne({ email });
-    if (existingUser)
-      return res.status(400).json({ message: "Email already registered" });
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ email, password: hashedPassword, gameId });
-    await newUser.save();
-
-    const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET);
-    res.json({ message: "Signup successful ✅", token });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET || "fallbackSecretKey");
+    res.json({ message: "Signup successful", token });
+  } catch (err) {
+    res.status(500).json({ message: "Error: " + err.message });
   }
 });
 
-// 🔑 Login Route
+// Login route
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-
     const user = await User.findOne({ email });
     if (!user) return res.status(400).json({ message: "User not found" });
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch)
-      return res.status(400).json({ message: "Invalid password" });
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) return res.status(400).json({ message: "Invalid password" });
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
-    res.json({ message: "Login successful ✅", token });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET || "fallbackSecretKey");
+    res.json({ message: "Login successful", token });
+  } catch (err) {
+    res.status(500).json({ message: "Error: " + err.message });
   }
 });
 
-// 🔒 Protected Route (Optional Example)
-app.get("/profile", async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader)
-    return res.status(401).json({ message: "Authorization token missing" });
-
-  try {
-    const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id).select("-password");
-    if (!user) return res.status(404).json({ message: "User not found" });
-    res.json(user);
-  } catch (error) {
-    res.status(401).json({ message: "Invalid token" });
-  }
-});
-
-// 🌍 Test Route
 app.get("/", (req, res) => {
-  res.send("✅ Vansh Backend Auth System Running Successfully 🚀");
+  res.send("✅ Vansh Backend Auth System Running");
 });
 
-// 🚀 Start Server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
