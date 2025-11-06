@@ -1,2 +1,0 @@
-# vansh_backend
-Vansh
