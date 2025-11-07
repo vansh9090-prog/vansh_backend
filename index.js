@@ -1,11 +1,10 @@
-// index.js — secure, no hard-coded secrets (fail-fast)
+// index.js — secure, no hard-coded secrets
 import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import cors from "cors";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import rateLimit from "express-rate-limit";
 
 dotenv.config();
 
@@ -31,14 +30,11 @@ if (!JWT_SECRET) {
 }
 
 // --- CORS setup ---
-// If FRONTEND_ORIGINS provided (comma separated), use whitelist; otherwise allow all.
-// (Recommended: set FRONTEND_ORIGINS in Render to restrict origins)
 let corsOptions;
 if (FRONTEND_ORIGINS) {
   const allowed = FRONTEND_ORIGINS.split(",").map(u => u.trim()).filter(Boolean);
   corsOptions = {
     origin: (origin, callback) => {
-      // allow requests with no origin (mobile apps, curl, Postman)
       if (!origin) return callback(null, true);
       if (allowed.indexOf(origin) !== -1) return callback(null, true);
       callback(new Error("CORS blocked by server"));
@@ -47,7 +43,6 @@ if (FRONTEND_ORIGINS) {
     credentials: true,
   };
 } else {
-  // No origins set — allow all (use only for development) — recommended to set FRONTEND_ORIGINS in production
   corsOptions = {
     origin: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -56,23 +51,13 @@ if (FRONTEND_ORIGINS) {
 }
 app.use(cors(corsOptions));
 
-// --- Rate limiter (basic protection) ---
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 200, // limit each IP to 200 requests per windowMs
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: "Too many requests, please try again later." },
-});
-app.use(limiter);
-
 // --- Connect to MongoDB ---
 mongoose
   .connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log("✅ MongoDB connected"))
   .catch(err => {
     console.error("❌ MongoDB connection error:", err);
-    process.exit(1); // critical — exit so deployment shows failure
+    process.exit(1);
   });
 
 // --- User schema/model ---
@@ -80,7 +65,7 @@ const userSchema = new mongoose.Schema({
   email: { type: String, unique: true, required: true, lowercase: true, trim: true },
   password: { type: String, required: true },
   gameId: { type: String, required: true, trim: true },
-  role: { type: String, default: "user" }, // future: admin/moderator
+  role: { type: String, default: "user" },
 }, { timestamps: true });
 
 const User = mongoose.models.User || mongoose.model("User", userSchema);
@@ -102,16 +87,16 @@ const verifyToken = (req, res, next) => {
   }
 };
 
-// --- Helper: create token (short expiry recommended) ---
+// --- Helper: create token ---
 const createToken = (userId) => {
-  return jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: "7d" }); // change as needed
+  return jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: "7d" });
 };
 
 // --- Routes ---
 // Health
 app.get("/", (req, res) => res.json({ ok: true, message: "Vansh Backend Running" }));
 
-// Signup (public)
+// Signup
 app.post("/signup", async (req, res) => {
   try {
     const { email, password, gameId } = req.body;
@@ -132,7 +117,7 @@ app.post("/signup", async (req, res) => {
   }
 });
 
-// Login (public)
+// Login
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -164,11 +149,10 @@ app.get("/me", verifyToken, async (req, res) => {
   }
 });
 
-// Protected: get other user by id only if same user or admin
+// Protected: get other user
 app.get("/user/:id", verifyToken, async (req, res) => {
   try {
     if (req.userId !== req.params.id) {
-      // allow if requester is admin
       const requester = await User.findById(req.userId);
       if (!requester || requester.role !== "admin") {
         return res.status(403).json({ message: "Unauthorized access" });
@@ -183,7 +167,7 @@ app.get("/user/:id", verifyToken, async (req, res) => {
   }
 });
 
-// Example protected update (only owner or admin)
+// Update user (protected)
 app.put("/user/:id", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -195,7 +179,6 @@ app.put("/user/:id", verifyToken, async (req, res) => {
     }
     const updates = {};
     if (req.body.gameId) updates.gameId = String(req.body.gameId).trim();
-    // do not allow email/password changes here — implement separate endpoints with validation
     const updated = await User.findByIdAndUpdate(id, updates, { new: true }).select("-password");
     res.json({ message: "Updated", user: updated });
   } catch (err) {
